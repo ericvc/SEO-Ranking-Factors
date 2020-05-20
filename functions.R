@@ -1,3 +1,23 @@
+auth_pagespeed2 <- function (api_key, verbose = TRUE) 
+{
+  # assert_that(noNA(api_key), not_empty(api_key), is.string(api_key), 
+  #             nchar(api_key) > 0, noNA(verbose), not_empty(verbose), 
+  #             is.logical(verbose))
+  x <- GET(url = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed", 
+           query = list(url = "https://www.w3.org/", key = api_key, 
+                        strategy = "desktop"))
+  Sys.sleep(0.5)
+  if (x$status_code == 200) {
+    Sys.setenv(PAGESPEED_API_KEY = api_key)
+    if (verbose) 
+      message("API key authorized.")
+  }
+  else {
+    stop(paste0("Authorization error: HTTP status code ", 
+                x$status_code, ". Check your API key."))
+  }
+}
+
 get_H_tags <- function(Url) {
   ##Get response from input URL
   response = read_html(Url)
@@ -25,11 +45,11 @@ get_H_tags <- function(Url) {
 get_text_body <- function(response) {
   ##Parse and re-format page content to calculate properties of interest
   response_body = response %>%
-    html_nodes("body") %>%
+    html_nodes("p") %>%
     html_text() %>%
     str_replace_all(., "[\r\n\t]" , " ") %>% # remove all space and new lines
     paste0(., collapse = " ") %>%
-    gsub("rt", "", .) %>% #removes spaces in text strings
+    gsub("\\r\\t", "", .) %>% #removes spaces in text strings
     gsub("@\\w+", "", .) %>% #removes spaces in text strings
     gsub("[[:punct:]]", " ", .) %>% #removes punctuation
     gsub("http\\w+", " ", .) %>% #removes links
@@ -334,59 +354,27 @@ SEMRush_API_organic_search <- function(keyword, client, competitor, semrush_api_
 
 SEMRush_API_get_units <- function(semrush_api_key){
   str1 = "http://www.semrush.com/users/countapiunits.html?key=" #SEMRush API link
-  Url = paste0(str1,semrush_api_key)
-  result <- httr::GET(Url)
-  if(result$status_code == 200){
-    #get content from returns
-    #answers
-    cont = httr::content(result)
-    if(str_detect(cont,"ERROR 50")==TRUE){
-      return_df  = data.frame(NA)
+  Url = paste0(str1, semrush_api_key)
+  response <- httr::GET(Url)
+  if (response$status_code == 200) {
+    cont = httr::content(response) %>% 
+      html_text()
+    if (str_detect(cont, "ERROR 50") == TRUE) {
+      return(NA)
     } else{
-      cont = read_html(Url) %>%
-        html_nodes("p") %>% 
-        str_extract_all(., "[[:digit:]]+") %>% 
-        unlist %>% 
-        as.numeric
-      #data.frame to return
-      return_df = data.frame(api_points = formatC(cont, format = "d", big.mark = ","))
+      api_units = read_html(response) %>% #read result of response
+        html_text %>% #grab text from html code
+        as.numeric %>% #convert to numeric
+        formatC(format = "d", big.mark = ",") #format value (insert commas)
     }
-    #names(return_df) = c("backlinks_total","domains_num","urls_num")
-    return(return_df)
+    return(api_units)
   }
 }
 
-formatDomain = function(domain){
+formatDomain = function(url){
   
-  #check for http:// or https:// prefix and remove it if necessary
-  if(stringr::str_detect(domain,"http://")){
-    domain. = str_remove(domain, "http://")
-    if(stringr::str_detect(domain.,"www.")){
-      domain. = str_remove(domain., "www.")
-    }
-    if(stringr::str_ends(domain.,"/")){
-      domain. = str_remove(domain., "/")
-    }
-  }
-  if(stringr::str_detect(domain,"https://")){
-    domain. = str_remove(domain, "https://")
-    if(stringr::str_detect(domain.,"www.")){
-      domain. = str_remove(domain., "www.")
-    }
-    if(stringr::str_ends(domain.,"/")){
-      domain. = str_remove(domain., "/")
-    }
-  }
-  if(!stringr::str_detect(domain,"http")){
-    domain. = domain
-    if(stringr::str_detect(domain.,"www.")){
-      domain. = str_remove(domain., "www.")
-    }
-    if(stringr::str_ends(domain.,"/")){
-      domain. = str_remove(domain., "/")
-    }
-  }
-  
-  return(stringr::str_trunc(domain., width=35))
-  
+  #Remove prefix from url
+  str_remove_all(url, pattern = "^(http[s]?://www\\.|http[s]?://|www\\.)") %>%
+    str_trunc(width=35) #limit to 35 characters
+ 
 }

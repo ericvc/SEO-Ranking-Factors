@@ -21,11 +21,10 @@ source("functions.R")
 #read-in api key JSON file. 
 #Should contain a simple list with key names "semrush_api_key" and "google_lighthouse_api_key"
 #See "api_keys_example.json" for template
-keys <- jsonlite::read_json("api_keys.json")
-attach(keys)
+attach(jsonlite::read_json("api_keys.json"))
 
 #Authorize google lighthouse api
-auth_pagespeed(google_lighthouse_api_key)
+auth_pagespeed2(google_lighthouse_api_key)
 
 #Define list of parameters from Google Lighthouse
 parameters = c(
@@ -81,11 +80,11 @@ sidebar <- dashboardSidebar(
   ), style = "")),
   
   # Text box input to define Domains for comparison
-  h5("1) Enter Domain Names to Compare"),
+  h4(HTML('<p style="margin-left:5px">1) Enter Domains to Compare</p>'), .noWS = "outside"), 
   textInput("client", "", value = NULL, placeholder = "example.com"),
   # Text box input to define Domains for comparison
   textInput("competitor", "", value = NULL, placeholder = "example.com"),
-  h5("2) How Many Keywords?"),
+  h4(HTML('<p style="margin-left:5px">2) How Many Keywords?</p>'), .noWS = "outside"), 
   sliderInput(
     inputId = "num_kw",
     label = "",
@@ -98,19 +97,15 @@ sidebar <- dashboardSidebar(
   ),
   #textInput(inputId = "api_key", label = "Enter SEMRush API Key", placeholder = '9ef54d3c4f26358e21754e419e1574ba'),
   actionButton("search", "Search Keywords", width = "90%"),
-  br(),
-  h5("3) Select Keyword for Comparisons"),
+  h4(HTML('<p style="margin-left:5px">3) Select Keywords</p>'), .noWS = "outside"), 
   selectInput(
     inputId = "keyword",
     label = "",
     selectize = TRUE,
     choices = c("Search for keywords...")
   ),
-  br(),
+  h4(HTML('<p style="margin-left:5px">4) Compare</p>'), .noWS = "outside"), 
   actionButton("submit", "Submit", width = "90%")
-  # Clear results
-  #actionButton("clear", "Clear Output")
-  
 )
 
 ## Create body of dashboard page
@@ -123,7 +118,7 @@ body <- dashboardBody(
       width = 12,
       # The id lets us use input$tabset1 on the server to find the current tab
       id = "tabset1",
-      height = "750px",
+      #height = "750px",
       tabPanel(
         "Ranking Factors",
         "",
@@ -168,11 +163,16 @@ body <- dashboardBody(
                h4(textOutput(
                  "PageHeaderTagsTitle"
                )),
-               h6(tableOutput("viewHeaderTags")))
-    )
-  ),
+               h6(tableOutput("viewHeaderTags"))
+      ),
+      tabPanel("View SEMRush API Units", "", 
+               h4(textOutput( 
+                 "apiUnitsTitle" 
+               )), 
+               h5(uiOutput("viewAPIUnits")) 
+      ),
   fluidRow(infoBoxOutput("tabset1Selected"))
-)
+)))
 
 ## Create the app
 shinyApp(
@@ -185,7 +185,22 @@ shinyApp(
   ),
   
   #Server logic
-  server = function(input, output, session) { 
+  server = function(input, output, session) {
+    
+    timelapse = 1000*60*60*24*5 #checks API unit total every 5 days (in milliseconds) 
+    api_out <- reactivePoll(timelapse, session, 
+                            # This function returns the time that log_file was last modified 
+                            checkFunc = function() { 
+                              Sys.time() 
+                            }, 
+                            # This function returns the content of log_file 
+                            valueFunc = function() { 
+                              api_units <- SEMRush_API_get_units(semrush_api_key = semrush_api_key) 
+                              timestamp. <- paste0("(",Sys.time(),")") 
+                              api_out <- paste(api_units, "units remaining", timestamp.) 
+                              return(api_out) 
+                            } 
+    )
   
     #Get ranking keywords for comparisons
     observeEvent(input$search, {
@@ -395,68 +410,35 @@ shinyApp(
       
       progress$set(value = 2)  
       
-      if(length(whichMissing)==2){
-        outString = "No page appears in the top 20 results."
-        stop(safeError(outString))
-      } else{
-        
-        if(length(whichMissing)==1){
-          Urls. = Urls[-whichMissing]
-          progress$set(value = 3)  
-          d <- download_lighthouse(
-            url=Urls.,
-            output_type = "simple", # return the results in a wide data frame
-            strategy = c("desktop", # check both desktop and mobile, bind
-                         "mobile"),
-            interval = 0.5,           # wait 2 seconds between the calls to API
-            categories = c("performance", # run performance & accessibility
-                           "accessibility"))
-          
-          d2 = d[d$parameter %in% parameters,] %>%
-            as_tibble
-          
-          d2 = rbind(platform = c("device","mobile","desktop"),d2)
-          d2$parameter <- d2$parameter %>% 
-            str_remove(., "performance_") %>% 
-            str_remove(., "displayValue") %>% 
-            str_remove(.,"accessibility_") %>%
-            str_remove(.,"score") %>%
-            str_replace_all(.,"_"," ") %>%
-            str_replace_all(.,"\\."," ") %>% 
-            str_to_title(., local="en")
-          names(d2) <- c("",formatDomain(Urls.),formatDomain(Urls.))
-          return(d2)
-        }
-        
-        if(length(whichMissing)==0){
-          Urls. = Urls
-          progress$set(value = 3)  
-          d <- download_lighthouse(
-            url=Urls.,
-            output_type = "simple", # return the results in a wide data frame
-            strategy = c("desktop", # check both desktop and mobile, bind
-                         "mobile"),
-            interval = 0.5,           # wait 2 seconds between the calls to API
-            categories = c("performance", # run performance & accessibility
-                           "accessibility"))
-          
-          d2 = d[d$parameter %in% parameters,] %>%
-            as_tibble
-          
-          d2 = rbind(platform = c("device","mobile","mobile","desktop","desktop"),d2)
-          d2$parameter <- d2$parameter %>% 
-            str_remove(., "performance_") %>% 
-            str_remove(., "displayValue") %>%
-            str_remove(.,"accessibility_") %>%
-            str_remove(.,"score") %>%
-            str_replace_all(.,"_"," ") %>%
-            str_replace_all(.,"\\."," ") %>% 
-            str_to_title(., local="en")
-          names(d2) <- c("",sapply(Urls.,formatDomain),sapply(Urls.,formatDomain))
-          return(d2)
-        }
-      }
+      if(length(whichMissing)>0){
+        Urls[whichMissing] <- paste0("http://www.",c(input$client, input$competitor)[whichMissing])
+      } 
+      progress$set(value = 3)  
+      d <- download_lighthouse(
+        url=Urls,
+        output_type = "simple", # return the results in a wide data frame
+        strategy = c("desktop", # check both desktop and mobile, bind
+                     "mobile"),
+        interval = 0.5,           # wait 2 seconds between the calls to API
+        categories = c("performance", # run performance & accessibility
+                       "accessibility"))
+      
+      d2 = d[d$parameter %in% parameters,] %>%
+        as_tibble
+      
+      d2 = rbind(platform = c("device","mobile","mobile","desktop","desktop"),d2)
+      d2$parameter <- d2$parameter %>% 
+        str_remove(., "performance_") %>% 
+        str_remove(., "displayValue") %>%
+        str_remove(.,"accessibility_") %>%
+        str_remove(.,"score") %>%
+        str_replace_all(.,"_"," ") %>%
+        str_replace_all(.,"\\."," ") %>% 
+        str_to_title(., local="en")
+      names(d2) <- c("",sapply(Urls,formatDomain),sapply(Urls,formatDomain))
+      return(d2)
       progress$set(value = 4)  
+    
     })
     
     htags_out = eventReactive(input$submit, { #add functions to build output data.frame.
@@ -476,32 +458,16 @@ shinyApp(
       
       progress$set(value = 2)  
       
-      if(length(whichMissing)==2){
-        outString = "No page appears in the top 20 results."
-        stop(safeError(outString))
-      } else{
-        
-        if(length(whichMissing)==1){
-          Urls. = Urls[-whichMissing]
-          progress$set(value = 3)  
-          out = get_H_tags(Urls.) %>% 
-            data.frame
-          names(out) = formatDomain(Urls.)
-          rownames(out) = paste0("H",1:6)
-          return(out)
-        }
-        
-        if(length(whichMissing)==0){
-          Urls. = Urls
-          progress$set(value = 3)  
-          out = lapply(Urls., function(url) get_H_tags(url)) %>%
-            do.call("cbind",.) %>%
-            data.frame
-          names(out) = sapply(Urls., function(url) formatDomain(url))
-          rownames(out) = paste0("H",1:6)
-          return(out)
-        }
+      if(length(whichMissing)>0){
+        Urls[whichMissing] <- paste0("http://www.",c(input$client, input$competitor)[whichMissing])
       }
+      progress$set(value = 3)  
+      out = lapply(Urls, function(url) get_H_tags(url)) %>%
+        do.call("cbind",.) %>%
+        data.frame
+      names(out) = sapply(Urls, function(url) formatDomain(url))
+      rownames(out) = paste0("h",1:6)
+      return(out)
       progress$set(value = 4)  
     })
     
@@ -511,6 +477,7 @@ shinyApp(
     output$PageAttrTitle = renderText({"Ranking Page Attributes"})
     output$PageSpeedTitle = renderText({"Google Lighthouse Page Metrics"})
     output$PageHeaderTagsTitle = renderText({"Page Header Tags"})
+    output$apiUnitsTitle = renderText({"SEMRush API Units Balance"}) 
     #Outputs Render
     output$viewDomains = renderTable({df_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s",width = 850)
     output$viewKeyword = renderTable({kw_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s", width = 500)
@@ -521,6 +488,7 @@ shinyApp(
     output$PageSpeedDesc2 = renderUI(parameters_tags[[2]])
     output$PageSpeedDesc3 = renderUI(parameters_tags[[3]])
     output$PageSpeedDesc4 = renderUI(parameters_tags[[4]])
-    output$PageSpeedDesc5 = renderUI(parameters_tags[[5]])    
+    output$PageSpeedDesc5 = renderUI(parameters_tags[[5]])
+    output$viewAPIUnits = renderUI({api_out()}) 
   }
 )
