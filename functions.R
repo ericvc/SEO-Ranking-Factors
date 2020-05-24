@@ -1,5 +1,6 @@
-auth_pagespeed2 <- function (api_key, verbose = TRUE) 
-{
+#google authentication function from the 'pagespeedParseR' had a broken link
+#replicated function needed to use Page Speed API.
+auth_pagespeed2 <- function(api_key, verbose = TRUE){
   # assert_that(noNA(api_key), not_empty(api_key), is.string(api_key), 
   #             nchar(api_key) > 0, noNA(verbose), not_empty(verbose), 
   #             is.logical(verbose))
@@ -9,13 +10,33 @@ auth_pagespeed2 <- function (api_key, verbose = TRUE)
   Sys.sleep(0.5)
   if (x$status_code == 200) {
     Sys.setenv(PAGESPEED_API_KEY = api_key)
-    if (verbose) 
+    if(verbose) 
       message("API key authorized.")
   }
   else {
     stop(paste0("Authorization error: HTTP status code ", 
                 x$status_code, ". Check your API key."))
   }
+}
+
+get_top_N <- function(query, num_results=20){
+  
+  require(stringr)
+  require(XML)
+  require(rvest)
+  require(reticulate)
+  
+  #for testing
+  query. <- query %>%
+    str_trim() %>%
+    str_replace_all(pattern="\\s{1,}", replacement = "+")
+  
+  #get google SERP with input query
+  source_python("get_google_results.py")
+  r <- google_results(query., num_results=num_results)
+  r$run() #run python function
+  return(r$results) #return results of the function
+  
 }
 
 get_H_tags <- function(Url) {
@@ -79,7 +100,6 @@ get_text_title <- function(response) {
     #remove "stop words" - common words in the English language providing little context (a, an, the, or, etc.)
     #tm::removeWords(., tm::stopwords()) %>%
     tolower # remove all space and new lines
-  
   return(response_title)
 }
 

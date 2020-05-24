@@ -165,6 +165,18 @@ body <- dashboardBody(
                )),
                h6(tableOutput("viewHeaderTags"))
       ),
+      tabPanel(
+        title="Google SERP", "",
+        textInput("query","Enter Keywords"),
+        actionButton("search2","Search Google"),
+        br(),
+        br(),
+        dataTableOutput("SERP", width = "85%"),
+        br(),
+        br(),
+        downloadButton("dl_google_top10 ", "Export to CSV"),
+        h6(textOutput("serp_warnings"))
+      ),
       tabPanel("View SEMRush API Units", "", 
                h4(textOutput( 
                  "apiUnitsTitle" 
@@ -471,6 +483,34 @@ shinyApp(
       progress$set(value = 4)  
     })
     
+    google_serp <- eventReactive(input$search2, {
+      
+      progress <- Progress$new(session, min=1, max=3)
+      on.exit(progress$close())
+      progress$set(message = 'Querying Google.com',
+                   detail = '')
+      progress$set(value = 1)
+      
+      dt = get_top_N(input$query, num_results=20)
+      
+      progress$set(message = 'Gathering top search results',
+                   detail = '')
+      progress$set(value = 2)
+      
+      dt2 = cbind(as.numeric(rownames(dt)),dt)
+      names(dt2) = c("Rank","Title","URL")
+      dt2$URL <- paste0("<a href='",dt2$URL,"'>",dt2$URL,"</a>")
+      rownames(dt2) = NULL
+      write.csv(dt2, "temp/google_top10.csv", row.names = FALSE)
+      
+      progress$set(message = 'Formatting table',
+                   detail = '')
+      progress$set(value = 3)
+      
+      return(dt2)
+      
+    })
+    
     #Outputs Titles
     output$KeywordTitle = renderText({"Keyword Info"})
     output$DomainTitle = renderText({"Domain Info"})
@@ -478,17 +518,20 @@ shinyApp(
     output$PageSpeedTitle = renderText({"Google Lighthouse Page Metrics"})
     output$PageHeaderTagsTitle = renderText({"Page Header Tags"})
     output$apiUnitsTitle = renderText({"SEMRush API Units Balance"}) 
+    output$SERP <- DT::renderDataTable({google_serp()}, rownames=FALSE, escape=FALSE)
     #Outputs Render
     output$viewDomains = renderTable({df_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s",width = 850)
     output$viewKeyword = renderTable({kw_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s", width = 500)
     output$viewPageAttr = renderTable({pa_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s", width = 850)
     output$viewPageSpeed = renderTable({lh_out()}, rownames = FALSE, bordered = TRUE, align = "c", spacing = "s", width = 850)
     output$viewHeaderTags = renderTable({htags_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s", width = 850)
+    output$serp_warnings = renderText("WARNING: Too many searches in a short time will cause Google to temporarily flag this IP address.")
     output$PageSpeedDesc1 = renderUI(parameters_tags[[1]])
     output$PageSpeedDesc2 = renderUI(parameters_tags[[2]])
     output$PageSpeedDesc3 = renderUI(parameters_tags[[3]])
     output$PageSpeedDesc4 = renderUI(parameters_tags[[4]])
     output$PageSpeedDesc5 = renderUI(parameters_tags[[5]])
-    output$viewAPIUnits = renderUI({api_out()}) 
+    output$viewAPIUnits = renderUI({api_out()})
+    
   }
 )
