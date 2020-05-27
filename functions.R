@@ -1,3 +1,11 @@
+textInputRow <-function (inputId, label, value = "",...) 
+{
+  div(style="display:inline-block",
+      tags$label(label, `for` = inputId), 
+      tags$input(id = inputId, type = "text", value = value,class="input-small"))
+}
+
+
 #google authentication function from the 'pagespeedParseR' had a broken link
 #replicated function needed to use Page Speed API.
 auth_pagespeed2 <- function(api_key, verbose = TRUE){
@@ -19,24 +27,52 @@ auth_pagespeed2 <- function(api_key, verbose = TRUE){
   }
 }
 
-get_top_N <- function(query, num_results=20){
+get_top_N <- function(query, num_results=20, platform="desktop"){
+  
+  if(!platform %in% c("desktop","mobile")){
+    stop("Error: platform user-agent must be either 'desktop' or 'mobile'.")
+  }
   
   require(stringr)
   require(XML)
   require(rvest)
-  require(reticulate)
-  
-  #for testing
+
   query. <- query %>%
     str_trim() %>%
     str_replace_all(pattern="\\s{1,}", replacement = "+")
   
-  #get google SERP with input query
-  source_python("get_google_results.py")
-  r <- google_results(query., num_results=num_results)
-  r$run() #run python function
-  return(r$results) #return results of the function
-  
+  if(platform == "desktop"){
+    # desktop user-agent
+    headers = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:65.0) Gecko/20100101 Firefox/65.0"
+  }
+  if(platform == "mobile"){
+    # mobile user-agent
+    headers = "Mozilla/5.0 (Linux; Android 7.0; SM-G930V Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.125 Mobile Safari/537.36"
+  }
+
+  Url <-  paste0("https://www.google.com/search?q=",query.,"&num=",num_results)
+  response <- httr::GET(Url, config = add_headers("user-agent"=headers))
+  if(response$status_code == 200){
+
+    pageTitle <- response %>%
+      read_html %>%
+      html_nodes("div[class='r']") %>%
+      html_nodes("h3") %>%
+      html_text()
+
+    pageLinks <- response %>%
+      read_html %>%
+      html_nodes("div[class='r']") %>%
+      html_node("a") %>%
+      html_attr("href")
+    #pageLinks <- pageLinks[pageLinks!="#"
+    data <- as_tibble(cbind(pageTitle,pageLinks))
+    return(data)
+
+  } else{
+    warning("Status code returned was not 200 (",response$status_code,")")
+  }
+
 }
 
 get_H_tags <- function(Url) {

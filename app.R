@@ -18,9 +18,9 @@ library(pagespeedParseR)
 source("functions.R")
 
 ## Set page variables
-#read-in api key JSON file. 
-#Should contain a simple list with key names "semrush_api_key" and "google_lighthouse_api_key"
-#See "api_keys_example.json" for template
+#Read-in api key JSON file 'api_keys.json'
+#The file should contain a simple list with key names "semrush_api_key" and "google_lighthouse_api_key"
+#See the "api_keys_example.json" for a template
 attach(jsonlite::read_json("api_keys.json"))
 
 #Authorize google lighthouse api
@@ -168,16 +168,16 @@ body <- dashboardBody(
       tabPanel(
         title="Google SERP", "",
         textInput("query","Enter Keywords"),
+        numericInput("num_results","Max. # of results", min = 1, max = 20, value = 10, step=1, width = "5%"),
         actionButton("search2","Search Google"),
         br(),
         br(),
         dataTableOutput("SERP", width = "85%"),
         br(),
         br(),
-        downloadButton("dl_google_top10 ", "Export to CSV"),
-        h6(textOutput("serp_warnings"))
+        h5(textOutput("serp_warnings"))
       ),
-      tabPanel("View SEMRush API Units", "", 
+      tabPanel("View SEMrush API Units", "", 
                h4(textOutput( 
                  "apiUnitsTitle" 
                )), 
@@ -199,6 +199,15 @@ shinyApp(
   #Server logic
   server = function(input, output, session) {
     
+    # ## Setup python virtual environment
+    # # Create a virtual environment selecting your desired python version
+    # reticulate::virtualenv_create(envname = "python_environment", python= "python3")
+    # # Explicitly install python libraries that you want to use
+    # reticulate::virtualenv_install("python_environment", packages = c('bs4','pandas','requests'))
+    # # Select the virtual environment
+    # reticulate::use_virtualenv("python_environment", required = TRUE)
+    
+    ## Report remaining SEMRush API units
     timelapse = 1000*60*60*24*5 #checks API unit total every 5 days (in milliseconds) 
     api_out <- reactivePoll(timelapse, session, 
                             # This function returns the time that log_file was last modified 
@@ -483,7 +492,7 @@ shinyApp(
       progress$set(value = 4)  
     })
     
-    google_serp <- eventReactive(input$search2, {
+    google_serp <- function(){
       
       progress <- Progress$new(session, min=1, max=3)
       on.exit(progress$close())
@@ -491,7 +500,7 @@ shinyApp(
                    detail = '')
       progress$set(value = 1)
       
-      dt = get_top_N(input$query, num_results=20)
+      dt = get_top_N(input$query, num_results=input$num_results)
       
       progress$set(message = 'Gathering top search results',
                    detail = '')
@@ -499,9 +508,11 @@ shinyApp(
       
       dt2 = cbind(as.numeric(rownames(dt)),dt)
       names(dt2) = c("Rank","Title","URL")
+      dt2$Domain = url_parse(dt2$URL)$server %>%
+        str_remove(pattern = "www.")
       dt2$URL <- paste0("<a href='",dt2$URL,"'>",dt2$URL,"</a>")
       rownames(dt2) = NULL
-      write.csv(dt2, "temp/google_top10.csv", row.names = FALSE)
+      # write.csv(dt2, "temp/google_top10.csv", row.names = FALSE)
       
       progress$set(message = 'Formatting table',
                    detail = '')
@@ -509,7 +520,9 @@ shinyApp(
       
       return(dt2)
       
-    })
+    }
+    
+    google_serp_out <- eventReactive(input$search2, google_serp())
     
     #Outputs Titles
     output$KeywordTitle = renderText({"Keyword Info"})
@@ -518,20 +531,23 @@ shinyApp(
     output$PageSpeedTitle = renderText({"Google Lighthouse Page Metrics"})
     output$PageHeaderTagsTitle = renderText({"Page Header Tags"})
     output$apiUnitsTitle = renderText({"SEMRush API Units Balance"}) 
-    output$SERP <- DT::renderDataTable({google_serp()}, rownames=FALSE, escape=FALSE)
+    output$SERP <- DT::renderDataTable({google_serp_out()}, rownames=FALSE, escape=FALSE, options = list(
+      lengthMenu = list(c(10, -1), c('10', 'All')),
+      pageLength = -1
+    ))
+    output$serp_warnings = renderText("WARNING: Too many searches in a short time will cause Google to temporarily flag this IP address.")
     #Outputs Render
     output$viewDomains = renderTable({df_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s",width = 850)
     output$viewKeyword = renderTable({kw_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s", width = 500)
     output$viewPageAttr = renderTable({pa_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s", width = 850)
     output$viewPageSpeed = renderTable({lh_out()}, rownames = FALSE, bordered = TRUE, align = "c", spacing = "s", width = 850)
     output$viewHeaderTags = renderTable({htags_out()}, rownames = TRUE, bordered = TRUE, align = "c", spacing = "s", width = 850)
-    output$serp_warnings = renderText("WARNING: Too many searches in a short time will cause Google to temporarily flag this IP address.")
     output$PageSpeedDesc1 = renderUI(parameters_tags[[1]])
     output$PageSpeedDesc2 = renderUI(parameters_tags[[2]])
     output$PageSpeedDesc3 = renderUI(parameters_tags[[3]])
     output$PageSpeedDesc4 = renderUI(parameters_tags[[4]])
     output$PageSpeedDesc5 = renderUI(parameters_tags[[5]])
     output$viewAPIUnits = renderUI({api_out()})
-    
+
   }
 )
