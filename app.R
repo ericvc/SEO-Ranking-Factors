@@ -227,7 +227,9 @@ shinyApp(
     observeEvent(input$search, {
 
       domains = c(input$client, input$competitor)
-      validate(any(domains != ""), message="Error: You must enter domain names to find competing keyword phrases.")
+      if(any(domains=="")){
+        validate(FALSE, message="Error: You must enter domain names to find competing keyword phrases.")
+      }
 
       progress <- Progress$new(session, min = 1, max = 1)
       on.exit(progress$close())
@@ -259,7 +261,9 @@ shinyApp(
       {
 
         domains = c(input$client, input$competitor)
-        validate(!any(domains == ""), message="Error: Missing domain(s).")
+        if(any(domains=="")){
+          validate(FALSE, message="Error: Missing domain(s).")
+        }
 
         #Start progress bar and increment
         progress <- Progress$new(session, min = 1, max = 1)
@@ -330,7 +334,10 @@ shinyApp(
     kw_out = eventReactive(input$submit_rf, {
 
       domains = c(input$client, input$competitor)
-      validate(!any(domains == ""), message="Error: Missing domain(s).")
+      if(any(domains=="")){
+        validate(FALSE, message="Error: Missing domain(s).")
+      }
+
 
       progress <- Progress$new(session, min=1, max=1)
       on.exit(progress$close())
@@ -357,7 +364,10 @@ shinyApp(
     pa_out = eventReactive(input$submit_rf, {
 
       domains = c(input$client, input$competitor)
-      validate(!any(domains == ""), message="Error: Missing domain(s).")
+      if(any(domains=="")){
+        validate(FALSE, message="Error: Missing domain(s).")
+      }
+
 
       progress <- Progress$new(session, min=1, max=1)
       on.exit(progress$close())
@@ -436,7 +446,9 @@ shinyApp(
       progress$set(value = 1)
 
       urls = c(input$client, input$competitor)
-      validate(!any(urls == ""), message="Error: Missing domain(s).")
+      if(any(urls=="")){
+        validate(FALSE, message="Error: Missing domain(s).")
+      }
       urls_formatted <- paste0("http://www.", urls)
 
       progress$set(value = 2)
@@ -478,7 +490,9 @@ shinyApp(
       progress$set(value = 1)
 
       urls = c(input$client, input$competitor)
-      validate(!any(urls == ""), message="Error: Missing domain(s).")
+      if(any(urls=="")){
+        validate(FALSE, message="Error: Missing domain(s).")
+      }
 
       urls_formatted <- paste0("http://www.", urls)
 
@@ -495,7 +509,9 @@ shinyApp(
 
     google_serp <- function(){
 
-      validate(input$query != "", message="Error: Google search query must not be empty.")
+      if(input$query==""){
+        validate(FALSE, message="Error: Google search query must not be empty.")
+      }
 
       progress <- Progress$new(session, min=1, max=3)
       on.exit(progress$close())
