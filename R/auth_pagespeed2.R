@@ -12,6 +12,8 @@
 #' @import httr
 #'
 auth_pagespeed2 <- function(api_key, verbose = TRUE){
+  require(assertthat)
+  require(httr)
   assert_that(noNA(api_key), not_empty(api_key), is.string(api_key),
               nchar(api_key) > 0, noNA(verbose), not_empty(verbose),
               is.logical(verbose))
